@@ -1,4 +1,5 @@
 from databricks.sdk import WorkspaceClient
+from databricks.sdk.errors import NotFound # NotFound त्रुटि को संभालने के लिए
 
 # Initialize the Databricks Workspace Client.
 w = WorkspaceClient()
@@ -13,22 +14,31 @@ repo_provider = "gitHub"
 # -----------------------------------------------------------------------------------
 repo_path = "/Repos/vipultak7171@gmail.com/house-price-prediction-mlops"
 
-# Create or update the repository.
+# -----------------------------------------------------------------------------------
+# सुधार: अब स्क्रिप्ट अधिक मजबूती से रेपो की स्थिति को संभालती है।
+# -----------------------------------------------------------------------------------
+repo = None
 try:
-    # Check if the repository already exists.
-    existing_repos = w.repos.get_by_path(repo_path)
-    print(f"Repository already exists at {repo_path}. Updating it...")
-    # Update the repository to ensure it's on the correct branch if needed.
-    w.repos.update(
-        repo_id=existing_repos.id,
-        branch="main" # Or any other branch you want to start with.
-    )
-except Exception:
-    # If the repository doesn't exist, create it.
+    # एक अधिक मजबूत विधि का उपयोग करके रेपो के अस्तित्व की जांच करें
+    repos_list = list(w.repos.list(path_prefix=repo_path))
+    if repos_list:
+        repo = repos_list[0]
+    else:
+        raise NotFound(f"No repo found at path: {repo_path}")
+except NotFound:
     print(f"Repository not found at {repo_path}. Creating it...")
-    new_repo = w.repos.create(
+    repo = w.repos.create(
         url=repo_url,
         provider=repo_provider,
         path=repo_path
     )
-    print(f"Repository added successfully! Repo ID: {new_repo.id}")
+    print(f"Repository added successfully! Repo ID: {repo.id}")
+    print("ℹ️ To sync with remote changes in the future, just run this script again.")
+
+if repo:
+    # Update the repository by fetching the latest changes from the remote.
+    w.repos.update(
+        repo_id=repo.id,
+        branch="main" 
+    )
+    print("✅ Repository updated successfully!")
