@@ -12,9 +12,6 @@ repo_path = f"/Repos/vipultak7171@gmail.com/{repo_name}"
 print("Creating jobs for Databricks Community Edition...")
 print("Note: Using existing compute resources (no new cluster creation)")
 
-# Community Edition के लिए modified job configuration
-# नए cluster के बजाय existing compute का उपयोग करें
-
 def create_community_job(job_name, python_file_path, parameters=None):
     """Community Edition के लिए job create करने का helper function"""
     
@@ -38,8 +35,6 @@ def create_community_job(job_name, python_file_path, parameters=None):
                 new_settings=jobs.JobSettings(
                     name=job_name,
                     tasks=[task_config],
-                    # Community Edition में existing cluster ID का उपयोग करें
-                    # या compute configuration को skip करें (serverless का उपयोग होगा)
                 )
             )
             print(f"Job '{job_name}' updated successfully!")
@@ -58,8 +53,6 @@ def create_community_job(job_name, python_file_path, parameters=None):
             w.jobs.create(
                 name=job_name,
                 tasks=[task_config],
-                # Community Edition: No cluster configuration needed
-                # Serverless compute will be used automatically
             )
             print(f"Job '{job_name}' created successfully!")
             
@@ -102,7 +95,7 @@ def create_community_job(job_name, python_file_path, parameters=None):
 print("\n1. Creating Development Job...")
 create_community_job(
     job_name="dev-ml-training-pipeline",
-    python_file_path=f"{repo_path}/dev_env/Model-training",
+    python_file_path=f"{repo_path}/dev_env/Model-Training",
     parameters={"environment": "development"}
 )
 
@@ -110,7 +103,7 @@ create_community_job(
 print("\n2. Creating UAT Job...")
 create_community_job(
     job_name="uat-ml-inference-pipeline", 
-    python_file_path=f"{repo_path}/uat_env/Model-inference",
+    python_file_path=f"{repo_path}/uat_env/Model-Inference",
     parameters={"stage": "Staging", "environment": "uat"}
 )
 
@@ -118,7 +111,7 @@ create_community_job(
 print("\n3. Creating Production Job...")
 create_community_job(
     job_name="prod-ml-inference-pipeline",
-    python_file_path=f"{repo_path}/prod_env/Model-inference", 
+    python_file_path=f"{repo_path}/prod_env/Model-Inference", 
     parameters={"stage": "Production", "environment": "production"}
 )
 
@@ -140,7 +133,7 @@ try:
     if mlops_jobs:
         print("Found MLOps jobs:")
         for job in mlops_jobs:
-            print(f"  - {job.settings.name} (ID: {job.job_id})")
+            print(f"  - {job.settings.name} (ID: {job.job_id})")
     else:
         print("No MLOps jobs found yet")
         
