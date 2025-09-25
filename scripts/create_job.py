@@ -99,20 +99,56 @@ create_community_job(
     parameters={"environment": "development"}
 )
 
-# --- UAT Job ---
-print("\n2. Creating UAT Job...")
-create_community_job(
-    job_name="uat-ml-inference-pipeline", 
-    python_file_path=f"{repo_path}/uat_env/Model-Inference",
-    parameters={"stage": "Staging", "environment": "uat"}
-)
+# --- UAT Job with two tasks ---
+print("\n2. Creating UAT Job with multiple tasks...")
+uat_job_name = "uat-ml-inference-pipeline"
+uat_tasks = [
+    # Task 1: Staging the model
+    jobs.Task(
+        task_key="staging_task",
+        notebook_task=jobs.NotebookTask(
+            notebook_path=f"{repo_path}/uat_env/model_staging_uat",
+            base_parameters={"alias": "Staging"}
+        )
+    ),
+    # Task 2: Running inference on the staged model
+    jobs.Task(
+        task_key="inference_task",
+        notebook_task=jobs.NotebookTask(
+            notebook_path=f"{repo_path}/uat_env/Model-Inference",
+            # FIX: environment parameter add करें
+            base_parameters={"alias": "Staging", "environment": "uat"}
+        ),
+        depends_on=[jobs.TaskDependency(task_key="staging_task")]
+    )
+]
+
+try:
+    # Check if job already exists
+    existing_uat_job = next((j for j in w.jobs.list() if j.settings.name == uat_job_name), None)
+    
+    if existing_uat_job:
+        print(f"Job '{uat_job_name}' already exists. Updating it...")
+        w.jobs.reset(
+            job_id=existing_uat_job.job_id,
+            new_settings=jobs.JobSettings(name=uat_job_name, tasks=uat_tasks)
+        )
+        print(f"Job '{uat_job_name}' updated with multi-task pipeline!")
+    else:
+        print(f"Job '{uat_job_name}' not found. Creating new multi-task job...")
+        w.jobs.create(name=uat_job_name, tasks=uat_tasks)
+        print(f"Job '{uat_job_name}' created successfully!")
+except Exception as e:
+    print(f"❌ Error with UAT job '{uat_job_name}': {e}")
+    
 
 # --- Production Job ---
 print("\n3. Creating Production Job...")
 create_community_job(
     job_name="prod-ml-inference-pipeline",
     python_file_path=f"{repo_path}/prod_env/Model-Inference", 
-    parameters={"stage": "Production", "environment": "production"}
+    # FIX: Unity Catalog के लिए 'production' के बजाय 'Production' alias का उपयोग करें
+    parameters={"alias": "Production", "environment": "production"}
 )
 
 print("\n" + "="*50)
