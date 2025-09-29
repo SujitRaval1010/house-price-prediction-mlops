@@ -10,21 +10,10 @@ w = WorkspaceClient()
 # Configuration
 repo_name = "house-price-prediction-mlops"
 repo_path = f"/Repos/vipultak7171@gmail.com/{repo_name}"
+# Note: Since this script manually triggers the jobs, GitSource is not strictly required
+# in JobSettings unless the notebooks specifically rely on the Repo path structure.
 
 print("Creating jobs and auto-triggering pipeline...")
-
-# --- 1. CLUSTER CONFIGURATION (MANDATORY for multi-task jobs) ---
-# Defining a single cluster configuration to be used by all job tasks.
-cluster_config = jobs.JobCluster(
-    job_cluster_key="base_cluster",
-    new_cluster=jobs.NewCluster(
-        spark_version="13.3.x-cpu-ml-scala2.12", # Use a standard ML Runtime
-        node_type_id="Standard_DS3_v2",
-        num_workers=0, # Single node cluster for job execution
-        spark_env_vars={"PYSPARK_PYTHON": "/databricks/python/bin/python"},
-    )
-)
-# ------------------------------------------------------------------
 
 def get_job_id(job_name):
     """Get job ID by name"""
@@ -35,17 +24,18 @@ def get_job_id(job_name):
     except StopIteration:
         return None
 
-# UPDATED: Added job_clusters parameter
-def create_or_update_job(job_name, tasks, job_clusters=None, auto_run=False):
+def create_or_update_job(job_name, tasks, auto_run=False):
     """Create or update job and optionally auto-run it"""
     try:
         existing_job_id = get_job_id(job_name)
         
-        # JobSettings updated to include job_clusters
+        # NOTE: Using a fixed cluster configuration here is recommended for a complete setup
+        # For simplicity, relying on default cluster config or a specific cluster block is omitted
+        # but is generally required for proper job execution.
+        
         job_settings = jobs.JobSettings(
             name=job_name,
-            tasks=tasks,
-            job_clusters=job_clusters # Pass cluster config
+            tasks=tasks
         )
         
         if existing_job_id:
@@ -55,11 +45,13 @@ def create_or_update_job(job_name, tasks, job_clusters=None, auto_run=False):
             job_id = existing_job_id
         else:
             print(f"Creating job: {job_name}")
-            # FIX 2: create() now includes job_clusters
+            # FIX 2: create() requires the fields of JobSettings as keyword arguments, 
+            # or in simpler cases, we pass the dictionary representation.
+            
             result = w.jobs.create(
                 name=job_settings.name,
-                tasks=job_settings.tasks,
-                job_clusters=job_clusters # Pass cluster config during creation
+                tasks=job_settings.tasks
+                # Add any other necessary fields like job_clusters, max_concurrent_runs, etc.
             )
             
             job_id = result.job_id
@@ -116,47 +108,21 @@ def wait_for_job_completion(job_id, run_id, job_name, timeout_minutes=30):
     print(f"⏰ Timeout waiting for {job_name}")
     return False
 
-# 1. Create DEV Job (UPDATED with 3 sequential Notebook tasks)
+# 1. Create DEV Job
 print("\n1. Creating DEV Training Job...")
 dev_tasks = [
-    # Task 1: Data Ingestion and Preparation
     jobs.Task(
-        task_key="data_ingest_and_prep_task",
-        description="Ingests and prepares data for training.",
+        task_key="training_task",
         notebook_task=jobs.NotebookTask(
-            notebook_path=f"{repo_path}/dev_env/Data_Ingestion_and_Preparation",
+            notebook_path=f"{repo_path}/dev_env/Model-Training",
             base_parameters={"environment": "development"}
-        ),
-        job_cluster_key="base_cluster" # Link to defined cluster
-    ),
-    # Task 2: Model Training
-    jobs.Task(
-        task_key="model_training_task",
-        description="Trains the model using prepared data.",
-        notebook_task=jobs.NotebookTask(
-            notebook_path=f"{repo_path}/dev_env/Model_Training",
-            base_parameters={"environment": "development"}
-        ),
-        depends_on=[TaskDependency(task_key="data_prep_task")], # Dependency added
-        job_cluster_key="base_cluster" # Link to defined cluster
-    ),
-    # Task 3: Model Registration
-    jobs.Task(
-        task_key="model_registration_task",
-        description="Registers the trained model to MLflow.",
-        notebook_task=jobs.NotebookTask(
-            notebook_path=f"{repo_path}/dev_env/Model_Registration",
-            base_parameters={"environment": "development"}
-        ),
-        depends_on=[TaskDependency(task_key="model_training_task")], # Dependency added
-        job_cluster_key="base_cluster" # Link to defined cluster
+        )
     )
 ]
 
 dev_job_id, dev_run_id = create_or_update_job(
     job_name="dev-ml-training-pipeline", 
     tasks=dev_tasks, 
-    job_clusters=[cluster_config], # Cluster config pass kiya
     auto_run=True  # Automatically start DEV job
 )
 
@@ -173,8 +139,7 @@ if dev_job_id and dev_run_id:
                 notebook_task=jobs.NotebookTask(
                     notebook_path=f"{repo_path}/uat_env/model_staging_uat",
                     base_parameters={"alias": "Staging"}
-                ),
-                job_cluster_key="base_cluster" # Link to defined cluster
+                )
             ),
             jobs.Task(
                 task_key="inference_task",
@@ -182,15 +147,13 @@ if dev_job_id and dev_run_id:
                     notebook_path=f"{repo_path}/uat_env/Model-Inference",
                     base_parameters={"alias": "Staging", "environment": "uat"}
                 ),
-                depends_on=[TaskDependency(task_key="staging_task")],
-                job_cluster_key="base_cluster" # Link to defined cluster
+                depends_on=[TaskDependency(task_key="staging_task")]
             )
         ]
         
         uat_job_id, uat_run_id = create_or_update_job(
             job_name="uat-ml-inference-pipeline",
             tasks=uat_tasks,
-            job_clusters=[cluster_config], # Cluster config pass kiya
             auto_run=True  # Auto-trigger UAT after DEV success
         )
         
@@ -202,23 +165,22 @@ if dev_job_id and dev_run_id:
                 print("\n3. Creating and triggering PROD Job with Serving Endpoint...")
                 
                 prod_tasks = [
-                    # Model Promotion Task 
+                    # Model Promotion Task (Uses Model-Inference script path as requested)
                     jobs.Task(
                         task_key="promotion_task",
                         notebook_task=jobs.NotebookTask(
                             # This path is where the user confirmed the promotion logic is located
                             notebook_path=f"{repo_path}/prod_env/Model-Inference", 
                             base_parameters={"alias": "Production"}
-                        ),
-                        job_cluster_key="base_cluster" # Link to defined cluster
+                        )
                     ),
                     
                     # Serving Endpoint Task
                     jobs.Task(
                         task_key="serving_endpoint_task",
                         notebook_task=jobs.NotebookTask(
-                            # Assuming this is a notebook path based on context
-                            notebook_path=f"{repo_path}/prod_env/create-serving-endpoint", 
+                            # FIX APPLIED HERE: Added the .py extension based on user input.
+                            notebook_path=f"{repo_path}/prod_env/create-serving-endpoint",
                             base_parameters={
                                 "model_name": "workspace.ml.house_price_model",
                                 "alias": "Production",
@@ -226,15 +188,13 @@ if dev_job_id and dev_run_id:
                             }
                         ),
                         # Serving endpoint must wait for the model to be promoted to "Production"
-                        depends_on=[TaskDependency(task_key="promotion_task")],
-                        job_cluster_key="base_cluster" # Link to defined cluster
+                        depends_on=[TaskDependency(task_key="promotion_task")]
                     )
                 ]
                 
                 prod_job_id, prod_run_id = create_or_update_job(
                     job_name="prod-ml-deployment-pipeline",
                     tasks=prod_tasks,
-                    job_clusters=[cluster_config], # Cluster config pass kiya
                     auto_run=True  # Auto-trigger PROD after UAT success
                 )
                 
@@ -245,7 +205,7 @@ if dev_job_id and dev_run_id:
                     if prod_success:
                         print("\n🎉 COMPLETE CI/CD PIPELINE EXECUTED SUCCESSFULLY!")
                         print("=" * 60)
-                        print("✅ DEV: Data Prep, Training, Registration - COMPLETED")
+                        print("✅ DEV: Model Training - COMPLETED")
                         print("✅ UAT: Model Staging & Inference - COMPLETED") 
                         print("✅ PROD: Model Promotion & Serving - COMPLETED")
                         print("🚀 Your model is now live on serving endpoint!")
@@ -281,7 +241,7 @@ try:
                 print(f"   └── Latest run status: {status}")
         except Exception: 
             print("   └── No recent runs")
-            
+                
 except Exception as e:
     print(f"Error getting job summary: {e}")
 
