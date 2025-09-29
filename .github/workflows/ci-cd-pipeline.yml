@@ -1,0 +1,53 @@
+name: Databricks MLOps CI/CD Pipeline
+
+on:
+push:
+branches:
+# CI/CD पाइपलाइन इन ब्रांचेस में कोड पुश होने पर शुरू होगी।
+- main
+- uat
+- prod
+
+jobs:
+update-databricks-pipeline:
+runs-on: ubuntu-latest
+# Databricks environment secrets का उपयोग करें
+environment: Databricks
+
+steps:
+  - name: Checkout repository
+    uses: actions/checkout@v2
+
+  - name: Set up Python
+    uses: actions/setup-python@v2
+    with:
+      python-version: '3.11'
+
+  - name: Install Dependencies
+    run: |
+      # Databricks SDK को इंस्टॉल करें
+      pip install databricks-sdk
+      # आपके requirements.txt से अन्य प्रोजेक्ट निर्भरताओं को इंस्टॉल करें
+      pip install -r requirements.txt
+
+  # ----------------------------------------------------
+  # Step 1: Databricks Repo को सिंक और अपडेट करना (CI)
+  # ----------------------------------------------------
+  # यह स्क्रिप्ट सुनिश्चित करती है कि Databricks में रेपो नवीनतम GitHub कोड के साथ 
+  # मौजूद और अपडेटेड है।
+  - name: Update/Create Databricks Repo (scripts/add_repo.py)
+    env:
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+    run: python scripts/add_repo.py
+    
+  # ----------------------------------------------------
+  # Step 2: Databricks Jobs को बनाना/अपडेट करना और ट्रिगर करना (CD)
+  # ----------------------------------------------------
+  # यह स्क्रिप्ट DEV, UAT, PROD जॉब्स को बनाती/अपडेट करती है और MLOps पाइपलाइन 
+  # (जो आमतौर पर DEV जॉब को ट्रिगर करके शुरू होती है) को शुरू करती है।
+  - name: Create/Update Jobs and Auto-Trigger MLOps Pipeline (scripts/create_job.py)
+    env:
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+    run: python scripts/create_job.py
