@@ -134,7 +134,7 @@ dev_tasks = [
         task_key="model_training_task",
         description="Trains the model using prepared data.",
         notebook_task=jobs.NotebookTask(
-            notebook_path=f"{repo_path}/dev_env/Model-Training",
+            notebook_path=f"{repo_path}/dev_env/Model_Training",
             base_parameters={"environment": "development"}
         ),
         depends_on=[TaskDependency(task_key="data_prep_task")], # Dependency added
