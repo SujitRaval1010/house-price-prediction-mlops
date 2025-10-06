@@ -2,7 +2,8 @@ name: Databricks MLOps CI/CD
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main   # Trigger workflow when code is pushed to main branch
 
 env:
   DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
@@ -10,23 +11,32 @@ env:
 
 jobs:
   deploy:
+    name: Deploy to Databricks
     runs-on: ubuntu-latest
+
     steps:
+      # Step 1: Checkout the repo
       - name: Checkout Repository
         uses: actions/checkout@v3
 
+      # Step 2: Set up Python 3.10
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
-          python-version: 3.10
+          python-version: '3.10'
+          cache: 'pip'   # speeds up dependency installs
 
+      # Step 3: Install dependencies
       - name: Install Dependencies
         run: |
+          python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install databricks-sdk
 
+      # Step 4: Sync GitHub repo with Databricks Repo
       - name: Sync GitHub Repo to Databricks
         run: python scripts/add_repo.py
 
+      # Step 5: Create or update Databricks Jobs (auto executes your pipelines)
       - name: Create/Update Databricks Jobs
         run: python scripts/create_job.py
