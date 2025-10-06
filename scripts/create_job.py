@@ -5,285 +5,316 @@ from databricks.sdk.service import jobs
 from databricks.sdk.service.jobs import TaskDependency
 
 # Initialize Databricks client
-w = WorkspaceClient()
+try:
+    w = WorkspaceClient()
+    print("✅ Databricks client initialized successfully")
+except Exception as e:
+    print(f"❌ त्रुटि: Databricks क्लाइंट को आरंभ करने में विफल।")
+    print(f"   सुनिश्चित करें कि DATABRICKS_HOST और DATABRICKS_TOKEN सेट हैं।")
+    print(f"   विवरण: {e}")
+    exit(1)
 
 # Configuration
 repo_name = "house-price-prediction-mlops"
 repo_path = f"/Repos/vipultak7171@gmail.com/{repo_name}"
 
-print("Creating jobs and auto-triggering pipeline...")
+print("\n" + "=" * 60)
+print("🚀 MLOPS PIPELINE ORCHESTRATION (Serverless)")
+print("=" * 60)
+print(f"📁 Repository Path: {repo_path}")
+print("-" * 60 + "\n")
 
-# --- 1. CLUSTER CONFIGURATION (MANDATORY for multi-task jobs) ---
-# Defining a single cluster configuration to be used by all job tasks.
-cluster_config = jobs.JobCluster(
-    job_cluster_key="base_cluster",
-    new_cluster=jobs.NewCluster(
-        spark_version="13.3.x-cpu-ml-scala2.12", # Use a standard ML Runtime
-        node_type_id="Standard_DS3_v2",
-        num_workers=0, # Single node cluster for job execution
-        spark_env_vars={"PYSPARK_PYTHON": "/databricks/python/bin/python"},
-    )
-)
-# ------------------------------------------------------------------
+# ==============================================================================
+# HELPER FUNCTIONS
+# ==============================================================================
 
 def get_job_id(job_name):
-    """Get job ID by name"""
+    """नाम से मौजूदा Databricks Job ID प्राप्त करें।"""
     try:
-        # Note: Using list() and iterating is safer than relying on job.get_by_name()
         job = next(j for j in w.jobs.list() if j.settings.name == job_name)
         return job.job_id
     except StopIteration:
         return None
+    except Exception as e:
+        print(f"⚠️ चेतावनी: Job list करते समय त्रुटि: {e}")
+        return None
 
-# UPDATED: Added job_clusters parameter
-def create_or_update_job(job_name, tasks, job_clusters=None, auto_run=False):
-    """Create or update job and optionally auto-run it"""
+
+def create_or_update_job(job_name, tasks, auto_run=False):
+    """
+    Job बनाता है, अपडेट करता है, और वैकल्पिक रूप से उसे ट्रिगर करता है।
+    Serverless compute के लिए कोई cluster configuration की आवश्यकता नहीं।
+    """
     try:
         existing_job_id = get_job_id(job_name)
         
-        # JobSettings updated to include job_clusters
+        # Serverless के लिए job_clusters parameter नहीं चाहिए
         job_settings = jobs.JobSettings(
             name=job_name,
             tasks=tasks,
-            job_clusters=job_clusters # Pass cluster config
+            # Serverless automatically compute allocate करता है
+            max_concurrent_runs=1  # एक समय में एक ही run
         )
         
         if existing_job_id:
-            print(f"Updating job: {job_name}")
-            # FIX 1: reset() requires job_id and new_settings (JobSettings object)
+            print(f"🔄 Job को अपडेट कर रहा है: {job_name} (ID: {existing_job_id})")
             w.jobs.reset(job_id=existing_job_id, new_settings=job_settings)
             job_id = existing_job_id
         else:
-            print(f"Creating job: {job_name}")
-            # FIX 2: create() now includes job_clusters
+            print(f"➕ नया Job बना रहा है: {job_name}")
             result = w.jobs.create(
                 name=job_settings.name,
                 tasks=job_settings.tasks,
-                job_clusters=job_clusters # Pass cluster config during creation
+                max_concurrent_runs=1
             )
-            
             job_id = result.job_id
             
-        print(f"Job '{job_name}' ready (ID: {job_id})")
+        print(f"✅ Job '{job_name}' तैयार है (ID: {job_id})")
         
-        # Auto-trigger if requested
         if auto_run:
-            print(f"Auto-triggering job: {job_name}")
+            print(f"🚀 Job को ऑटो-ट्रिगर कर रहा है: {job_name}")
             run_result = w.jobs.run_now(job_id=job_id)
-            print(f"Job triggered! Run ID: {run_result.run_id}")
+            print(f"   📋 Run ID: {run_result.run_id}")
             return job_id, run_result.run_id
             
         return job_id, None
         
     except Exception as e:
-        print(f"Error with job {job_name}: {e}")
+        print(f"❌ Job '{job_name}' में त्रुटि: {e}")
+        print(f"   विस्तृत त्रुटि: {str(e)}")
         return None, None
 
+
 def wait_for_job_completion(job_id, run_id, job_name, timeout_minutes=30):
-    """Wait for job completion"""
+    """Job के पूरा होने की प्रतीक्षा करें और स्थिति की जाँच करें।"""
     if not run_id:
         return False
         
-    print(f"Waiting for {job_name} to complete (max {timeout_minutes} minutes)...")
+    print(f"\n⏳ {job_name} के पूरा होने की प्रतीक्षा कर रहा है...")
+    print(f"   (अधिकतम समय: {timeout_minutes} मिनट)")
     
     timeout_seconds = timeout_minutes * 60
     start_time = time.time()
+    last_state = None
     
     while time.time() - start_time < timeout_seconds:
         try:
             run_info = w.jobs.get_run(run_id=run_id)
             state = run_info.state.life_cycle_state.value if run_info.state and run_info.state.life_cycle_state else "UNKNOWN"
             
+            # State change होने पर ही print करें
+            if state != last_state:
+                print(f"   📊 {job_name} स्थिति: {state}")
+                last_state = state
+            
             if state == "TERMINATED":
                 result_state = run_info.state.result_state.value if run_info.state and run_info.state.result_state else "UNKNOWN"
                 if result_state == "SUCCESS":
-                    print(f"✅ {job_name} completed successfully!")
+                    elapsed_time = int(time.time() - start_time)
+                    print(f"✅ {job_name} सफलतापूर्वक पूरा हुआ! (समय: {elapsed_time}s)")
                     return True
                 else:
-                    print(f"❌ {job_name} failed with state: {result_state}")
+                    print(f"❌ {job_name} विफल हो गया। स्थिति: {result_state}")
+                    if run_info.state.state_message:
+                        print(f"   त्रुटि संदेश: {run_info.state.state_message}")
                     return False
-            elif state in ["PENDING", "RUNNING"]:
-                print(f"⏳ {job_name} status: {state}")
-                time.sleep(30)  # Check every 30 seconds
-            else:
-                print(f"🔍 {job_name} status: {state}")
-                time.sleep(30)
+            
+            time.sleep(15)  # हर 15 सेकंड में जाँच करें
                 
         except Exception as e:
-            print(f"Error checking {job_name} status: {e}")
+            print(f"   ⚠️ स्थिति जाँचने में त्रुटि: {e}")
             time.sleep(30)
     
-    print(f"⏰ Timeout waiting for {job_name}")
+    print(f"⏰ {job_name} के लिए टाइमआउट हो गया ({timeout_minutes} मिनट)।")
     return False
 
-# 1. Create DEV Job (UPDATED with 3 sequential Notebook tasks)
-print("\n1. Creating DEV Training Job...")
+
+# ==============================================================================
+# 1. DEV JOB CREATION (Data Ingest -> Train -> Register)
+# ==============================================================================
+print("\n[STEP 1/3] 🛠️ DEV Training Pipeline बना रहा है...")
+print("-" * 60)
+
 dev_tasks = [
     # Task 1: Data Ingestion and Preparation
     jobs.Task(
         task_key="data_ingest_and_prep_task",
-        description="Ingests and prepares data for training.",
+        description="Ingests and prepares data for training",
         notebook_task=jobs.NotebookTask(
             notebook_path=f"{repo_path}/dev_env/Data_Ingestion_and_Preparation",
             base_parameters={"environment": "development"}
-        ),
-        job_cluster_key="base_cluster" # Link to defined cluster
+        )
+        # Serverless compute automatically assign होगा, कोई cluster key नहीं
     ),
+    
     # Task 2: Model Training
     jobs.Task(
         task_key="model_training_task",
-        description="Trains the model using prepared data.",
+        description="Trains the model using prepared data",
         notebook_task=jobs.NotebookTask(
             notebook_path=f"{repo_path}/dev_env/Model_Training",
             base_parameters={"environment": "development"}
         ),
-        depends_on=[TaskDependency(task_key="data_prep_task")], # Dependency added
-        job_cluster_key="base_cluster" # Link to defined cluster
+        depends_on=[TaskDependency(task_key="data_ingest_and_prep_task")]
     ),
+    
     # Task 3: Model Registration
     jobs.Task(
         task_key="model_registration_task",
-        description="Registers the trained model to MLflow.",
+        description="Registers the trained model to Unity Catalog",
         notebook_task=jobs.NotebookTask(
             notebook_path=f"{repo_path}/dev_env/Model_Registration",
             base_parameters={"environment": "development"}
         ),
-        depends_on=[TaskDependency(task_key="model_training_task")], # Dependency added
-        job_cluster_key="base_cluster" # Link to defined cluster
+        depends_on=[TaskDependency(task_key="model_training_task")]
     )
 ]
 
 dev_job_id, dev_run_id = create_or_update_job(
-    job_name="dev-ml-training-pipeline", 
-    tasks=dev_tasks, 
-    job_clusters=[cluster_config], # Cluster config pass kiya
-    auto_run=True  # Automatically start DEV job
+    job_name="1. dev-ml-training-pipeline", 
+    tasks=dev_tasks,
+    auto_run=True 
 )
 
-# 2. Wait for DEV completion, then trigger UAT
+# ==============================================================================
+# WAIT FOR DEV COMPLETION
+# ==============================================================================
 if dev_job_id and dev_run_id:
-    dev_success = wait_for_job_completion(dev_job_id, dev_run_id, "DEV Training", timeout_minutes=20)
+    dev_success = wait_for_job_completion(
+        dev_job_id, 
+        dev_run_id, 
+        "DEV Training Pipeline", 
+        timeout_minutes=25
+    )
+else:
+    print("\n❌ DEV Job को ट्रिगर नहीं कर सका। Pipeline रोक रहा है।")
+    exit(1)
+
+# ==============================================================================
+# 2. UAT JOB CREATION (Staging -> Inference Test)
+# ==============================================================================
+if dev_success:
+    print("\n[STEP 2/3] 🧪 UAT Testing Pipeline बना रहा है...")
+    print("-" * 60)
     
-    if dev_success:
-        print("\n2. Creating and triggering UAT Job...")
+    uat_tasks = [
+        # Task 1: Model Staging
+        jobs.Task(
+            task_key="model_staging_task",
+            description="Promotes the latest model version to Staging alias",
+            notebook_task=jobs.NotebookTask(
+                notebook_path=f"{repo_path}/uat_env/model_staging_uat", 
+                base_parameters={"alias": "Staging"}
+            )
+        ),
         
-        uat_tasks = [
-            jobs.Task(
-                task_key="staging_task",
-                notebook_task=jobs.NotebookTask(
-                    notebook_path=f"{repo_path}/uat_env/model_staging_uat",
-                    base_parameters={"alias": "Staging"}
-                ),
-                job_cluster_key="base_cluster" # Link to defined cluster
+        # Task 2: Inference Test
+        jobs.Task(
+            task_key="inference_test_task",
+            description="Runs inference tests against the Staging model",
+            notebook_task=jobs.NotebookTask(
+                notebook_path=f"{repo_path}/uat_env/Model-Inference",
+                base_parameters={"alias": "Staging", "environment": "uat"}
             ),
+            depends_on=[TaskDependency(task_key="model_staging_task")]
+        )
+    ]
+    
+    uat_job_id, uat_run_id = create_or_update_job(
+        job_name="2. uat-ml-inference-pipeline",
+        tasks=uat_tasks,
+        auto_run=True 
+    )
+    
+    # Wait for UAT completion
+    if uat_job_id and uat_run_id:
+        uat_success = wait_for_job_completion(
+            uat_job_id, 
+            uat_run_id, 
+            "UAT Testing Pipeline", 
+            timeout_minutes=20
+        )
+    else:
+        print("\n❌ UAT Job को ट्रिगर नहीं कर सका। Pipeline रोक रहा है।")
+        uat_success = False
+    
+    # ==========================================================================
+    # 3. PROD JOB CREATION (Promotion -> Serving Endpoint)
+    # ==========================================================================
+    if uat_success:
+        print("\n[STEP 3/3] 🚀 PROD Deployment Pipeline बना रहा है...")
+        print("-" * 60)
+        
+        prod_tasks = [
+            # Task 1: Model Promotion
             jobs.Task(
-                task_key="inference_task",
+                task_key="model_promotion_task",
+                description="Promotes the model from Staging to Production alias",
                 notebook_task=jobs.NotebookTask(
-                    notebook_path=f"{repo_path}/uat_env/Model-Inference",
-                    base_parameters={"alias": "Staging", "environment": "uat"}
+                    notebook_path=f"{repo_path}/prod_env/model-promotion", 
+                    base_parameters={"alias": "Production", "action": "promote"}
+                )
+            ),
+            
+            # Task 2: Serving Endpoint Deployment
+            jobs.Task(
+                task_key="serving_endpoint_task",
+                description="Creates/updates Serving Endpoint with Production model",
+                notebook_task=jobs.NotebookTask(
+                    notebook_path=f"{repo_path}/prod_env/create-serving-endpoint", 
+                    base_parameters={"environment": "prod"}
                 ),
-                depends_on=[TaskDependency(task_key="staging_task")],
-                job_cluster_key="base_cluster" # Link to defined cluster
+                depends_on=[TaskDependency(task_key="model_promotion_task")]
+            ),
+            # Task 3: Model Inference in Production
+            jobs.Task(
+                task_key="model_inference_production",
+                description="Runs inference tests against the Production model",
+                notebook_task=jobs.NotebookTask(
+                    notebook_path=f"{repo_path}/prod_env/Model-Inference",
+                    base_parameters={"alias": "Production", "environment": "prod"}
+                ),
+                depends_on=[TaskDependency(task_key="serving_endpoint_task")]
             )
         ]
-        
-        uat_job_id, uat_run_id = create_or_update_job(
-            job_name="uat-ml-inference-pipeline",
-            tasks=uat_tasks,
-            job_clusters=[cluster_config], # Cluster config pass kiya
-            auto_run=True  # Auto-trigger UAT after DEV success
+         
+        prod_job_id, prod_run_id = create_or_update_job(
+            job_name="3. prod-ml-deployment-pipeline",
+            tasks=prod_tasks,
+            auto_run=True 
         )
         
-        # 3. Wait for UAT completion, then trigger PROD
-        if uat_job_id and uat_run_id:
-            uat_success = wait_for_job_completion(uat_job_id, uat_run_id, "UAT Staging", timeout_minutes=15)
+        # Wait for PROD completion
+        if prod_job_id and prod_run_id:
+            prod_success = wait_for_job_completion(
+                prod_job_id, 
+                prod_run_id, 
+                "PROD Deployment Pipeline", 
+                timeout_minutes=30
+            )
             
-            if uat_success:
-                print("\n3. Creating and triggering PROD Job with Serving Endpoint...")
-                
-                prod_tasks = [
-                    # Model Promotion Task 
-                    jobs.Task(
-                        task_key="promotion_task",
-                        notebook_task=jobs.NotebookTask(
-                            # This path is where the user confirmed the promotion logic is located
-                            notebook_path=f"{repo_path}/prod_env/Model-Inference", 
-                            base_parameters={"alias": "Production"}
-                        ),
-                        job_cluster_key="base_cluster" # Link to defined cluster
-                    ),
-                    
-                    # Serving Endpoint Task
-                    jobs.Task(
-                        task_key="serving_endpoint_task",
-                        notebook_task=jobs.NotebookTask(
-                            # Assuming this is a notebook path based on context
-                            notebook_path=f"{repo_path}/prod_env/create-serving-endpoint", 
-                            base_parameters={
-                                "model_name": "workspace.ml.house_price_model",
-                                "alias": "Production",
-                                "endpoint_name": "house-price-endpoint"
-                            }
-                        ),
-                        # Serving endpoint must wait for the model to be promoted to "Production"
-                        depends_on=[TaskDependency(task_key="promotion_task")],
-                        job_cluster_key="base_cluster" # Link to defined cluster
-                    )
-                ]
-                
-                prod_job_id, prod_run_id = create_or_update_job(
-                    job_name="prod-ml-deployment-pipeline",
-                    tasks=prod_tasks,
-                    job_clusters=[cluster_config], # Cluster config pass kiya
-                    auto_run=True  # Auto-trigger PROD after UAT success
-                )
-                
-                # 4. Wait for PROD completion
-                if prod_job_id and prod_run_id:
-                    prod_success = wait_for_job_completion(prod_job_id, prod_run_id, "PROD Deployment", timeout_minutes=25)
-                    
-                    if prod_success:
-                        print("\n🎉 COMPLETE CI/CD PIPELINE EXECUTED SUCCESSFULLY!")
-                        print("=" * 60)
-                        print("✅ DEV: Data Prep, Training, Registration - COMPLETED")
-                        print("✅ UAT: Model Staging & Inference - COMPLETED") 
-                        print("✅ PROD: Model Promotion & Serving - COMPLETED")
-                        print("🚀 Your model is now live on serving endpoint!")
-                        print("=" * 60)
-                    else:
-                        print("❌ PROD job failed")
-                else:
-                    print("❌ Could not trigger PROD job")
+            if prod_success:
+                print("\n" + "=" * 60)
+                print("🎉 MLOPS PIPELINE EXECUTION SUCCESSFUL! 🎉")
+                print("=" * 60)
+                print("✅ DEV: Model trained and registered")
+                print("✅ UAT: Model validated in staging")
+                print("✅ PROD: Model deployed to production")
+                print("=" * 60)
+                print("\n💡 Next Steps:")
+                print("   1. Check your Unity Catalog for registered models")
+                print("   2. Verify the Serving Endpoint in Databricks UI")
+                print("   3. Test the production endpoint with sample data")
+                print("=" * 60)
             else:
-                print("❌ UAT job failed, skipping PROD")
+                print("\n❌ PROD Pipeline विफल रहा। Deployment logs जाँचें।")
         else:
-            print("❌ Could not trigger UAT job")
+            print("\n❌ PROD Job को ट्रिगर नहीं कर सका।")
     else:
-        print("❌ DEV job failed, stopping pipeline")
+        print("\n⏭️ UAT Pipeline विफल रहा, PROD deployment छोड़ रहा है।")
 else:
-    print("❌ Could not create/trigger DEV job")
+    print("\n⏭️ DEV Pipeline विफल रहा, आगे की pipelines छोड़ रहा है।")
 
-# Final summary
-print("\n📊 Pipeline Execution Summary:")
-try:
-    all_jobs = list(w.jobs.list())
-    mlops_jobs = [j for j in all_jobs if 'ml' in j.settings.name.lower()]
-    
-    for job in mlops_jobs:
-        print(f"📋 {job.settings.name} (ID: {job.job_id})")
-        
-        # Get latest run status
-        try:
-            runs = list(w.jobs.list_runs(job.job_id, limit=1))
-            if runs:
-                latest_run = runs[0]
-                status = latest_run.state.result_state.value if latest_run.state and latest_run.state.result_state else "RUNNING"
-                print(f"   └── Latest run status: {status}")
-        except Exception: 
-            print("   └── No recent runs")
-            
-except Exception as e:
-    print(f"Error getting job summary: {e}")
-
-print("\n🏁 Auto-triggered MLOps Pipeline Complete!")
-print("All jobs created and executed automatically in sequence.")
+print("\n" + "=" * 60)
+print("🏁 MLOps Pipeline Orchestration Script Complete!")
+print("=" * 60)
