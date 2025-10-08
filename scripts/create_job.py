@@ -1,4 +1,5 @@
 import os
+import sys
 import time
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.service import jobs
@@ -21,7 +22,7 @@ try:
     print(f"🔗 Workspace: {host}")
 except Exception as e:
     print(f"❌ Databricks client initialization failed: {e}")
-    exit(1)
+    sys.exit(1)  # ✅ Exit immediately on connection failure
 
 # =====================================================================
 # 2️⃣ Configuration
@@ -85,13 +86,19 @@ def create_or_update_job(job_name, tasks, auto_run=False):
         return job_id, None
 
     except Exception as e:
-        print(f"❌ Error in job '{job_name}': {e}")
+        print(f"❌ CRITICAL ERROR in job '{job_name}': {e}")
+        print(f"   This error prevents the pipeline from continuing.")
+        # ✅ Return None to indicate failure
         return None, None
 
 
 def wait_for_job_completion(job_id, run_id, job_name, timeout_minutes=30):
-    """Wait for Databricks job completion."""
+    """
+    Wait for Databricks job completion.
+    Returns: True if successful, False if failed/timeout
+    """
     if not run_id:
+        print(f"❌ No run_id provided for {job_name}. Cannot wait for completion.")
         return False
 
     print(f"\n⏳ Waiting for {job_name} to complete (max {timeout_minutes} min)...")
@@ -104,25 +111,56 @@ def wait_for_job_completion(job_id, run_id, job_name, timeout_minutes=30):
             state = run_info.state.life_cycle_state.value if run_info.state else "UNKNOWN"
 
             if state != last_state:
-                print(f"   📊 State: {state}")
+                elapsed = int(time.time() - start_time)
+                print(f"   📊 [{elapsed}s] State: {state}")
                 last_state = state
 
             if state == "TERMINATED":
                 result_state = run_info.state.result_state.value if run_info.state else "UNKNOWN"
+                
                 if result_state == "SUCCESS":
                     print(f"✅ {job_name} completed successfully.")
                     return True
                 else:
-                    print(f"❌ {job_name} failed. Status: {result_state}")
+                    print(f"❌ {job_name} FAILED!")
+                    print(f"   Result State: {result_state}")
+                    
+                    # Print error message if available
+                    if run_info.state.state_message:
+                        print(f"   Error Message: {run_info.state.state_message}")
+                    
                     return False
 
             time.sleep(15)
+            
         except Exception as e:
             print(f"⚠️ Error checking job status: {e}")
             time.sleep(30)
 
-    print(f"⏰ Timeout waiting for {job_name}.")
+    print(f"⏰ TIMEOUT waiting for {job_name} (exceeded {timeout_minutes} minutes).")
     return False
+
+
+def handle_job_failure(job_name, stage):
+    """
+    Handle job failure and exit pipeline
+    """
+    print("\n" + "=" * 60)
+    print(f"❌ PIPELINE FAILED AT {stage}")
+    print("=" * 60)
+    print(f"Job '{job_name}' did not complete successfully.")
+    print("\nReason for pipeline stop:")
+    print("  • Job execution failed or timed out")
+    print("  • Cannot proceed to next stage with failed dependencies")
+    print("  • Code or configuration issues need to be resolved")
+    print("\n📋 Troubleshooting Steps:")
+    print("  1. Check Databricks UI for detailed error logs")
+    print(f"  2. Review notebook code in: {repo_path}")
+    print("  3. Verify data availability and model parameters")
+    print("  4. Fix issues and re-run the pipeline")
+    print("\n🔗 Databricks Workspace: " + os.getenv("DATABRICKS_HOST"))
+    print("=" * 60)
+    sys.exit(1)  # ✅ Exit with error code
 
 
 # =====================================================================
@@ -163,9 +201,16 @@ dev_job_id, dev_run_id = create_or_update_job(
     auto_run=True
 )
 
-if not dev_run_id or not wait_for_job_completion(dev_job_id, dev_run_id, "DEV Training Pipeline", 25):
-    print("❌ Stopping pipeline as DEV failed.")
-    exit(1)
+# ✅ Check if job creation failed
+if dev_job_id is None or dev_run_id is None:
+    print("\n❌ CRITICAL: Failed to create or trigger DEV job")
+    print("   Cannot proceed with pipeline execution")
+    sys.exit(1)
+
+# ✅ Wait for completion and exit if failed
+dev_success = wait_for_job_completion(dev_job_id, dev_run_id, "DEV Training Pipeline", 25)
+if not dev_success:
+    handle_job_failure("DEV Training Pipeline", "DEVELOPMENT STAGE")
 
 # =====================================================================
 # 5️⃣ UAT JOB (Model Staging -> Inference Test)
@@ -197,9 +242,16 @@ uat_job_id, uat_run_id = create_or_update_job(
     auto_run=True
 )
 
-if not uat_run_id or not wait_for_job_completion(uat_job_id, uat_run_id, "UAT Pipeline", 20):
-    print("❌ Stopping pipeline as UAT failed.")
-    exit(1)
+# ✅ Check if job creation failed
+if uat_job_id is None or uat_run_id is None:
+    print("\n❌ CRITICAL: Failed to create or trigger UAT job")
+    print("   DEV completed but UAT cannot proceed")
+    sys.exit(1)
+
+# ✅ Wait for completion and exit if failed
+uat_success = wait_for_job_completion(uat_job_id, uat_run_id, "UAT Pipeline", 20)
+if not uat_success:
+    handle_job_failure("UAT Pipeline", "UAT STAGE")
 
 # =====================================================================
 # 6️⃣ PROD JOB (Promotion -> Serving -> Inference)
@@ -239,8 +291,34 @@ prod_job_id, prod_run_id = create_or_update_job(
     auto_run=True
 )
 
-wait_for_job_completion(prod_job_id, prod_run_id, "PROD Deployment Pipeline", 30)
+# ✅ Check if job creation failed
+if prod_job_id is None or prod_run_id is None:
+    print("\n❌ CRITICAL: Failed to create or trigger PROD job")
+    print("   DEV and UAT completed but PROD cannot proceed")
+    sys.exit(1)
 
+# ✅ Wait for completion and exit if failed
+prod_success = wait_for_job_completion(prod_job_id, prod_run_id, "PROD Deployment Pipeline", 30)
+if not prod_success:
+    handle_job_failure("PROD Deployment Pipeline", "PRODUCTION STAGE")
+
+# =====================================================================
+# 7️⃣ SUCCESS SUMMARY
+# =====================================================================
 print("\n" + "=" * 60)
 print("🎉 MLOPS PIPELINE COMPLETED SUCCESSFULLY!")
 print("=" * 60)
+print("\n✅ All stages completed:")
+print("   1. ✓ DEV Training Pipeline")
+print("   2. ✓ UAT Inference Pipeline")
+print("   3. ✓ PROD Deployment Pipeline")
+print("\n📊 Pipeline Summary:")
+print(f"   • DEV Job ID: {dev_job_id}")
+print(f"   • UAT Job ID: {uat_job_id}")
+print(f"   • PROD Job ID: {prod_job_id}")
+print("\n🔗 View results in Databricks:")
+print(f"   {os.getenv('DATABRICKS_HOST')}")
+print("=" * 60)
+
+# ✅ Exit with success code
+sys.exit(0)
