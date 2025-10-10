@@ -180,7 +180,7 @@ dev_tasks = [
     jobs.Task(
         task_key="model_training_task",
         notebook_task=jobs.NotebookTask(
-            notebook_path=f"{repo_path}/dev_env/Model_Training",
+            notebook_path=f"{repo_path}/dev_env/Model_Training_Xgboost",
             base_parameters={"environment": "development"}
         ),
         depends_on=[TaskDependency(task_key="data_ingest_and_prep_task")]
