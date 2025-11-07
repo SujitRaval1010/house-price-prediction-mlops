@@ -229,7 +229,7 @@ uat_tasks = [
     jobs.Task(
         task_key="inference_test_task",
         notebook_task=jobs.NotebookTask(
-            notebook_path=f"{repo_path}/uat_env/model_Inference",
+            notebook_path=f"{repo_path}/uat_env/model_inference",
             base_parameters={"alias": "Staging", "environment": "uat"}
         ),
         depends_on=[TaskDependency(task_key="model_staging_task")]
