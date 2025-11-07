@@ -278,7 +278,7 @@ prod_tasks = [
     jobs.Task(
         task_key="model_inference_production",
         notebook_task=jobs.NotebookTask(
-            notebook_path=f"{repo_path}/prod_env/model-Inference-prod",
+            notebook_path=f"{repo_path}/prod_env/model-inference-prod",
             base_parameters={"alias": "Production", "environment": "prod"}
         ),
         depends_on=[TaskDependency(task_key="serving_endpoint_task")]
