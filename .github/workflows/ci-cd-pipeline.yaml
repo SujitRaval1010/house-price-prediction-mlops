@@ -24,7 +24,7 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
-          cache: 'pip'   # speeds up dependency installs
+          cache: 'pip'
 
       # Step 3: Install dependencies
       - name: Install Dependencies
@@ -33,10 +33,11 @@ jobs:
           pip install -r requirements.txt
           pip install databricks-sdk
 
-      # Step 4: Sync GitHub repo with Databricks Repo
-      - name: Sync GitHub Repo to Databricks
-        run: python scripts/add_repo.py
+      # ✅ Removed: add_repo.py (no need)
+      # ❌ REMOVE THIS:
+      # - name: Sync GitHub Repo to Databricks
+      #   run: python scripts/add_repo.py
 
-      # Step 5: Create or update Databricks Jobs (auto executes your pipelines)
-      - name: Create/Update Databricks Jobs
+      # Step 4: Create/Update Databricks Jobs
+      - name: Create or Update Databricks Jobs
         run: python scripts/create_job.py
