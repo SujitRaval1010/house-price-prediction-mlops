@@ -3,7 +3,7 @@ name: Databricks MLOps CI/CD
 on:
   push:
     branches:
-      - main   # Trigger workflow when code is pushed to main branch
+      - main   # Runs when code is pushed to main
 
 env:
   DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
@@ -15,6 +15,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+
       # Step 1: Checkout the repo
       - name: Checkout Repository
         uses: actions/checkout@v3
@@ -33,11 +34,10 @@ jobs:
           pip install -r requirements.txt
           pip install databricks-sdk
 
-      # ✅ Removed: add_repo.py (no need)
-      # ❌ REMOVE THIS:
-      # - name: Sync GitHub Repo to Databricks
-      #   run: python scripts/add_repo.py
+      # Step 4: Sync GitHub repo with Databricks Repo
+      - name: Sync GitHub Repo to Databricks
+        run: python scripts/add_repo.py
 
-      # Step 4: Create/Update Databricks Jobs
-      - name: Create or Update Databricks Jobs
+      # Step 5: Create or update Databricks Jobs
+      - name: Create/Update Databricks Jobs
         run: python scripts/create_job.py
