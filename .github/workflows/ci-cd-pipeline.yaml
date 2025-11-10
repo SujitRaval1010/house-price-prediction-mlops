@@ -3,7 +3,7 @@ name: Databricks MLOps CI/CD
 on:
   push:
     branches:
-      - main   # Runs when code is pushed to main
+      - main  # Runs when code is pushed to main
 
 env:
   DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
@@ -15,7 +15,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-
       # Step 1: Checkout the repo
       - name: Checkout Repository
         uses: actions/checkout@v3
@@ -46,14 +45,14 @@ jobs:
       # Notification steps added
       # -------------------------
 
-      -      - name: Send Success Email
+      - name: Send Success Email
         if: success()
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: smtp.gmail.com
           server_port: 465
           username: ${{ secrets.EMAIL_SENDER }}
-          password: ${{ secrets.CI_CD }}        # 👈 updated
+          password: ${{ secrets.CI_CD }}
           subject: "✅ CI/CD Success: Databricks MLOps Pipeline"
           body: |
             Hello,
@@ -76,7 +75,7 @@ jobs:
           server_address: smtp.gmail.com
           server_port: 465
           username: ${{ secrets.EMAIL_SENDER }}
-          password: ${{ secrets.CI_CD }}        # 👈 updated
+          password: ${{ secrets.CI_CD }}
           subject: "❌ CI/CD Failure: Databricks MLOps Pipeline"
           body: |
             Hello,
