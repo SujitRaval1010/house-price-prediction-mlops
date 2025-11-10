@@ -42,52 +42,96 @@ jobs:
         run: python scripts/create_job.py
 
       # -------------------------
-      # Notification steps added
+      # 🔔 Slack Notification Steps
       # -------------------------
 
-      - name: Send Success Email
+      - name: Slack Notification - Success
         if: success()
-        uses: dawidd6/action-send-mail@v3
+        uses: slackapi/slack-github-action@v1.24.0
         with:
-          server_address: smtp.gmail.com
-          server_port: 465
-          username: ${{ secrets.EMAIL_SENDER }}
-          password: ${{ secrets.CI_CD }}
-          subject: "✅ CI/CD Success: Databricks MLOps Pipeline"
-          body: |
-            Hello,
-            The Databricks CI/CD pipeline completed SUCCESSFULLY.
-            Repository: ${{ github.repository }}
-            Branch: ${{ github.ref }}
-            Commit: ${{ github.sha }}
-            Workflow: ${{ github.workflow }}
-            Run URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-            Regards,
-            MLOps Bot
-          to: ${{ secrets.EMAIL_RECEIVER }}
-          from: "MLOps Bot <${{ secrets.EMAIL_SENDER }}>"
-          secure: true
+          payload: |
+            {
+              "text": ":white_check_mark: *CI/CD Success* — Databricks MLOps Pipeline",
+              "blocks": [
+                { "type": "section", "text": { "type": "mrkdwn", "text": "*✅ CI/CD Success*\nDatabricks MLOps pipeline completed successfully." } },
+                { "type": "section", "fields": [
+                    { "type": "mrkdwn", "text": "*Repo:*\n${{ github.repository }}" },
+                    { "type": "mrkdwn", "text": "*Branch:*\n${{ github.ref }}" },
+                    { "type": "mrkdwn", "text": "*Commit:*\n`${{ github.sha }}`" },
+                    { "type": "mrkdwn", "text": "*Run:*\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|Open Run>" }
+                  ]
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
-      - name: Send Failure Email
+      - name: Slack Notification - Failure
         if: failure()
-        uses: dawidd6/action-send-mail@v3
+        uses: slackapi/slack-github-action@v1.24.0
         with:
-          server_address: smtp.gmail.com
-          server_port: 465
-          username: ${{ secrets.EMAIL_SENDER }}
-          password: ${{ secrets.CI_CD }}
-          subject: "❌ CI/CD Failure: Databricks MLOps Pipeline"
-          body: |
-            Hello,
-            The Databricks CI/CD pipeline FAILED.
-            Repository: ${{ github.repository }}
-            Branch: ${{ github.ref }}
-            Commit: ${{ github.sha }}
-            Workflow: ${{ github.workflow }}
-            Run URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-            Please check the Actions logs for details.
-            Regards,
-            MLOps Bot
-          to: ${{ secrets.EMAIL_RECEIVER }}
-          from: "MLOps Bot <${{ secrets.EMAIL_SENDER }}>"
-          secure: true
+          payload: |
+            {
+              "text": ":x: *CI/CD Failure* — Databricks MLOps Pipeline",
+              "blocks": [
+                { "type": "section", "text": { "type": "mrkdwn", "text": "*❌ CI/CD Failed*\nPlease check the Actions logs for details." } },
+                { "type": "section", "fields": [
+                    { "type": "mrkdwn", "text": "*Repo:*\n${{ github.repository }}" },
+                    { "type": "mrkdwn", "text": "*Branch:*\n${{ github.ref }}" },
+                    { "type": "mrkdwn", "text": "*Run:*\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|Open Run>" }
+                  ]
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      # -------------------------
+      # 📧 Email Notification (Commented Out)
+      # -------------------------
+      # - name: Send Success Email
+      #   if: success()
+      #   uses: dawidd6/action-send-mail@v3
+      #   with:
+      #     server_address: smtp.gmail.com
+      #     server_port: 465
+      #     username: ${{ secrets.EMAIL_SENDER }}
+      #     password: ${{ secrets.CI_CD }}
+      #     subject: "✅ CI/CD Success: Databricks MLOps Pipeline"
+      #     body: |
+      #       Hello,
+      #       The Databricks CI/CD pipeline completed SUCCESSFULLY.
+      #       Repository: ${{ github.repository }}
+      #       Branch: ${{ github.ref }}
+      #       Commit: ${{ github.sha }}
+      #       Workflow: ${{ github.workflow }}
+      #       Run URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      #       Regards,
+      #       MLOps Bot
+      #     to: ${{ secrets.EMAIL_RECEIVER }}
+      #     from: "MLOps Bot <${{ secrets.EMAIL_SENDER }}>"
+      #     secure: true
+
+      # - name: Send Failure Email
+      #   if: failure()
+      #   uses: dawidd6/action-send-mail@v3
+      #   with:
+      #     server_address: smtp.gmail.com
+      #     server_port: 465
+      #     username: ${{ secrets.EMAIL_SENDER }}
+      #     password: ${{ secrets.CI_CD }}
+      #     subject: "❌ CI/CD Failure: Databricks MLOps Pipeline"
+      #     body: |
+      #       Hello,
+      #       The Databricks CI/CD pipeline FAILED.
+      #       Repository: ${{ github.repository }}
+      #       Branch: ${{ github.ref }}
+      #       Commit: ${{ github.sha }}
+      #       Workflow: ${{ github.workflow }}
+      #       Run URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      #       Please check the Actions logs for details.
+      #       Regards,
+      #       MLOps Bot
+      #     to: ${{ secrets.EMAIL_RECEIVER }}
+      #     from: "MLOps Bot <${{ secrets.EMAIL_SENDER }}>"
+      #     secure: true
