@@ -192,7 +192,7 @@ dev_tasks = [
             base_parameters={"environment": "development"}
         ),
         depends_on=[TaskDependency(task_key="model_training_task")]
-    )
+    ),
     jobs.Task(
         task_key="model_registration_task",
         notebook_task=jobs.NotebookTask(
