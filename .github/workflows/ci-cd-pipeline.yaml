@@ -33,12 +33,8 @@ jobs:
           pip install -r requirements.txt
           pip install databricks-sdk
 
-      # Step 4: Sync GitHub repo with Databricks Repo
-      - name: Sync GitHub Repo to Databricks
-        run: python scripts/add_repo.py
-
-      # Step 5: Create or update Databricks Jobs
-      - name: Create/Update Databricks Jobs
+      # Step 4: Create/Update Databricks Jobs
+      - name: Create or Update Databricks Jobs
         run: python scripts/create_job.py
 
       # -------------------------
