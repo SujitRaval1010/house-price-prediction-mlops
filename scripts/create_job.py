@@ -186,12 +186,20 @@ dev_tasks = [
         depends_on=[TaskDependency(task_key="data_ingest_and_prep_task")]
     ),
     jobs.Task(
+        task_key="model_evaluation_task",
+        notebook_task=jobs.NotebookTask(
+            notebook_path=f"{repo_path}/dev_env/Evaluation_script",
+            base_parameters={"environment": "development"}
+        ),
+        depends_on=[TaskDependency(task_key="model_training_task")]
+    )
+    jobs.Task(
         task_key="model_registration_task",
         notebook_task=jobs.NotebookTask(
             notebook_path=f"{repo_path}/dev_env/model_register",
             base_parameters={"environment": "development"}
         ),
-        depends_on=[TaskDependency(task_key="model_training_task")]
+        depends_on=[TaskDependency(task_key="model_evaluation_task")]
     )
 ]
 
