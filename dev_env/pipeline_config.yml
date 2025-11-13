@@ -1,0 +1,52 @@
+# ==================================================================================
+# 🎯 PIPELINE CONFIGURATION (Single Source of Truth)
+# ==================================================================================
+# Change only this file - everything else is automatic!
+# ==================================================================================
+
+# Model Settings
+model:
+  type: "xgboost"                        # Model type (xgboost, random_forest, etc.)
+  catalog: "workspace"
+  schema: "ml"
+  base_name: "house_price"               # Will become: workspace.ml.house_price_xgboost_uc2
+  
+# Experiment Settings
+experiment:
+  name: "/Shared/House_Price_Prediction_Config_Runs"
+  artifact_path: "xgboost_model"         # Where model is saved in MLflow
+  
+# Metric Configuration
+metrics:
+  primary_metric: "test_rmse"            # Metric to optimize (lower is better)
+  direction: "minimize"                  # minimize or maximize
+  improvement_threshold: 0.02            # 2% improvement required
+  
+# Data Settings
+data:
+  input_table: "workspace.default.house_price_delta"
+  features: 
+    - sq_feet
+    - num_bedrooms
+    - num_bathrooms
+    - year_built
+    - location_score
+  label: "price"
+  test_size: 0.2
+  random_state: 42
+
+# Delta Tables (for tracking)
+tables:
+  evaluation_log: "workspace.default.model_evaluation_log"
+  best_model_metadata: "workspace.default.best_model_metadata"
+  uat_results: "workspace.default.uat_inference_results"
+
+# Aliases
+aliases:
+  staging: "Staging"
+  production: "production"
+
+# UAT Thresholds
+uat:
+  mape_threshold: 15.0
+  r2_threshold: 0.75

@@ -180,7 +180,7 @@ dev_tasks = [
     jobs.Task(
         task_key="model_training_task",
         notebook_task=jobs.NotebookTask(
-            notebook_path=f"{repo_path}/dev_env/training_script",
+            notebook_path=f"{repo_path}/dev_env/train",
             base_parameters={"environment": "development"}
         ),
         depends_on=[TaskDependency(task_key="data_ingest_and_prep_task")]
@@ -188,7 +188,7 @@ dev_tasks = [
     jobs.Task(
         task_key="model_evaluation_task",
         notebook_task=jobs.NotebookTask(
-            notebook_path=f"{repo_path}/dev_env/Evaluation_script",
+            notebook_path=f"{repo_path}/dev_env/evaluation",
             base_parameters={"environment": "development"}
         ),
         depends_on=[TaskDependency(task_key="model_training_task")]
@@ -196,7 +196,7 @@ dev_tasks = [
     jobs.Task(
         task_key="model_registration_task",
         notebook_task=jobs.NotebookTask(
-            notebook_path=f"{repo_path}/dev_env/model_register",
+            notebook_path=f"{repo_path}/dev_env/register",
             base_parameters={"environment": "development"}
         ),
         depends_on=[TaskDependency(task_key="model_evaluation_task")]
@@ -230,14 +230,14 @@ uat_tasks = [
     jobs.Task(
         task_key="model_staging_task",
         notebook_task=jobs.NotebookTask(
-            notebook_path=f"{repo_path}/uat_env/model_staging",
+            notebook_path=f"{repo_path}/uat_env/uat_staging",
             base_parameters={"alias": "Staging"}
         )
     ),
     jobs.Task(
         task_key="inference_test_task",
         notebook_task=jobs.NotebookTask(
-            notebook_path=f"{repo_path}/uat_env/model_inference",
+            notebook_path=f"{repo_path}/uat_env/uat_inference",
             base_parameters={"alias": "Staging", "environment": "uat"}
         ),
         depends_on=[TaskDependency(task_key="model_staging_task")]
@@ -271,14 +271,14 @@ prod_tasks = [
     jobs.Task(
         task_key="model_promotion_task",
         notebook_task=jobs.NotebookTask(
-            notebook_path=f"{repo_path}/prod_env/model-promotion-prod",
+            notebook_path=f"{repo_path}/prod_env/prod_promotion",
             base_parameters={"alias": "Production", "action": "promote"}
         )
     ),
     jobs.Task(
         task_key="serving_endpoint_task",
         notebook_task=jobs.NotebookTask(
-            notebook_path=f"{repo_path}/prod_env/create-serving",
+            notebook_path=f"{repo_path}/prod_env/prod_create_serving",
             base_parameters={"environment": "prod"}
         ),
         depends_on=[TaskDependency(task_key="model_promotion_task")]
@@ -286,7 +286,7 @@ prod_tasks = [
     jobs.Task(
         task_key="model_inference_production",
         notebook_task=jobs.NotebookTask(
-            notebook_path=f"{repo_path}/prod_env/model-inference-prod",
+            notebook_path=f"{repo_path}/prod_env/prod_inference",
             base_parameters={"alias": "Production", "environment": "prod"}
         ),
         depends_on=[TaskDependency(task_key="serving_endpoint_task")]
