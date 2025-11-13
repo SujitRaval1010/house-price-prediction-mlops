@@ -1,31 +1,75 @@
-# ==================================================================================
-# 🎯 PIPELINE CONFIGURATION (Single Source of Truth)
-# ==================================================================================
-# Change only this file - everything else is automatic!
-# ==================================================================================
 
-# Model Settings
+# # 🎯 xgboost model PIPELINE CONFIGURATION (Single Source of Truth)
+
+# # Model Settings
+# model:
+#   type: "xgboost"                       
+#   catalog: "workspace"
+#   schema: "ml"
+#   base_name: "house_price"               
+  
+# # Experiment Settings
+# experiment:
+#   name: "/Shared/House_Price_Prediction_Config_Runs"
+#   artifact_path: "xgboost_model"        
+  
+# # Metric Configuration
+# metrics:
+#   primary_metric: "test_rmse"          
+#   direction: "minimize"                  
+#   improvement_threshold: 0.02            # 2% improvement required
+  
+# # Data Settings
+# data:
+#   input_table: "workspace.default.house_price_delta"
+#   features: 
+#     - sq_feet
+#     - num_bedrooms
+#     - num_bathrooms
+#     - year_built
+#     - location_score
+#   label: "price"
+#   test_size: 0.2
+#   random_state: 42
+
+# # Delta Tables (for tracking)
+# tables:
+#   evaluation_log: "workspace.default.model_evaluation_log"
+#   best_model_metadata: "workspace.default.best_model_metadata"
+#   uat_results: "workspace.default.uat_inference_results"
+
+# # Aliases
+# aliases:
+#   staging: "Staging"
+#   production: "production"
+
+# # UAT Thresholds
+# uat:
+#   mape_threshold: 15.0
+#   r2_threshold: 0.75
+
+
+# 🎯 RANDOM FOREST MODEL PIPELINE CONFIGURATION (Single Source of Truth)
+
 model:
-  type: "xgboost"                        # Model type (xgboost, random_forest, etc.)
+  type: "random_forest"              
   catalog: "workspace"
   schema: "ml"
-  base_name: "house_price"               # Will become: workspace.ml.house_price_xgboost_uc2
-  
-# Experiment Settings
+  base_name: "house_price"            
+
 experiment:
-  name: "/Shared/House_Price_Prediction_Config_Runs"
-  artifact_path: "xgboost_model"         # Where model is saved in MLflow
-  
-# Metric Configuration
+  name: "/Shared/House_Price_RandomForest_Experiments"  
+  artifact_path: "random_forest_model"                  
+
+
 metrics:
-  primary_metric: "test_rmse"            # Metric to optimize (lower is better)
-  direction: "minimize"                  # minimize or maximize
-  improvement_threshold: 0.02            # 2% improvement required
-  
-# Data Settings
+  primary_metric: "test_rmse"
+  direction: "minimize"
+  improvement_threshold: 0.02
+
 data:
   input_table: "workspace.default.house_price_delta"
-  features: 
+  features:
     - sq_feet
     - num_bedrooms
     - num_bathrooms
@@ -35,18 +79,17 @@ data:
   test_size: 0.2
   random_state: 42
 
-# Delta Tables (for tracking)
+
 tables:
   evaluation_log: "workspace.default.model_evaluation_log"
   best_model_metadata: "workspace.default.best_model_metadata"
   uat_results: "workspace.default.uat_inference_results"
 
-# Aliases
+
 aliases:
   staging: "Staging"
-  production: "production"
-
-# UAT Thresholds
+  production: "Production"
+  
 uat:
   mape_threshold: 15.0
   r2_threshold: 0.75
